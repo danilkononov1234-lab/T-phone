@@ -1,0 +1,65 @@
+
+name: Unpack and build T-Remote S3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Unpack project
+        run: |
+          unzip -q T-Remote-S3-USB-v2.0-GitHub-Actions.zip -d unpacked
+          ls -R unpacked
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build ESP32 firmware
+        working-directory: unpacked/T-Remote-S3-USB-v2/firmware
+        run: |
+          pip install platformio
+          pio run -e t-display-s3-usb
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Android APK
+        working-directory: unpacked/T-Remote-S3-USB-v2/android
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          curl -s https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.9/bin/gradle --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: t-remote-s3-usb-apk
+          path: unpacked/T-Remote-S3-USB-v2/android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: t-remote-s3-usb-firmware
+          path: |
+            unpacked/T-Remote-S3-USB-v2/firmware/.pio/build/t-display-s3-usb/firmware.bin
+            unpacked/T-Remote-S3-USB-v2/firmware/.pio/build/t-display-s3-usb/bootloader.bin
+            unpacked/T-Remote-S3-USB-v2/firmware/.pio/build/t-display-s3-usb/partitions.bin
